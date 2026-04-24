@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Kalkulator CBM Multi SKU</title>
+
+<style>
+body { font-family: Arial; background:#0f172a; color:#fff; padding:20px; }
+.container { max-width:1000px; margin:auto; }
+.card { background:#1e293b; padding:15px; border-radius:10px; margin-bottom:15px; }
+input, select { width:100%; padding:6px; margin-top:4px; border-radius:6px; border:none; }
+button { padding:8px; margin-top:10px; border:none; border-radius:6px; font-weight:bold; }
+.add { background:#3b82f6; }
+.calc { background:#22c55e; width:100%; }
+.remove { background:#ef4444; }
+.export { background:#f59e0b; width:100%; }
+.result { background:#020617; padding:10px; border-radius:8px; margin-top:10px; }
+.grid { display:grid; grid-template-columns:repeat(6,1fr); gap:6px; }
+</style>
+</head>
+
+<body>
+<div class="container">
+
+<h2>Kalkulator Ongkir CBM & KG (Multi SKU)</h2>
+
+<div class="card">
+<div id="products"></div>
+<button class="add" onclick="addProduct()">+ Tambah Produk</button>
+</div>
+
+<div class="card">
+<h3>Forwarder</h3>
+<input id="total_cost" placeholder="Total Ongkir (Rp)">
+<select id="mode">
+  <option value="cbm">By CBM</option>
+  <option value="kg">By KG</option>
+  <option value="auto">AUTO (Rekomendasi)</option>
+</select>
+<button class="calc" onclick="hitung()">Hitung</button>
+<button class="export" onclick="exportCSV()">Export CSV</button>
+</div>
+
+<div class="card">
+<h3>Hasil</h3>
+<div id="output" class="result"></div>
+</div>
+
+</div>
+
+<script>
+let products = [];
+let lastResult = [];
+
+function addProduct(){
+ const id = Date.now();
+ products.push(id);
+
+ document.getElementById("products").innerHTML += `
+ <div id="p_${id}" class="grid">
+   <input placeholder="Nama Produk" id="name_${id}">
+   <input placeholder="P(cm)" id="p_${id}_p">
+   <input placeholder="L(cm)" id="p_${id}_l">
+   <input placeholder="T(cm)" id="p_${id}_t">
+   <input placeholder="KG/pcs" id="p_${id}_kg">
+   <input placeholder="Qty" id="p_${id}_qty">
+   <button class="remove" onclick="removeProduct(${id})">X</button>
+ </div><br>
+ `;
+}
+
+function removeProduct(id){
+ products = products.filter(x=>x!==id);
+ document.getElementById("p_"+id).remove();
+}
+
+function vol(p,l,t){ return (p*l*t)/1000000; }
+
+function hitung(){
+ let data = [];
+
+ products.forEach(id=>{
+   let name = document.getElementById("name_"+id).value || "Produk";
+   let p = +document.getElementById("p_"+id+"_p").value||0;
+   let l = +document.getElementById("p_"+id+"_l").value||0;
+   let t = +document.getElementById("p_"+id+"_t").value||0;
+   let kg = +document.getElementById("p_"+id+"_kg").value||0;
+   let qty = +document.getElementById("p_"+id+"_qty").value||0;
+
+   let v = vol(p,l,t);
+   data.push({
+     name,
+     totalVol: v * qty,
+     totalKg: kg * qty,
+     qty
+   });
+ });
+
+ let totalVol = data.reduce((a,b)=>a+b.totalVol,0);
+ let totalKg = data.reduce((a,b)=>a+b.totalKg,0);
+
+ let cost = +document.getElementById("total_cost").value||0;
+ let mode = document.getElementById("mode").value;
+
+ let use = mode;
+
+ if(mode==="auto"){
+   let volWeight = totalVol * 1000;
+   use = volWeight > totalKg ? "cbm" : "kg";
+ }
+
+ let html = `Mode: <b>${use.toUpperCase()}</b><br><br>`;
+ lastResult = [];
+
+ data.forEach(d=>{
+   let ratio = use==="cbm"
+     ? (totalVol ? d.totalVol / totalVol : 0)
+     : (totalKg ? d.totalKg / totalKg : 0);
+
+   let costTotal = ratio * cost;
+   let per = d.qty ? costTotal / d.qty : 0;
+
+   lastResult.push({
+     nama: d.name,
+     total_cbm: d.totalVol.toFixed(4),
+     total_kg: d.totalKg.toFixed(2),
+     qty: d.qty,
+     ongkir_total: Math.round(costTotal),
+     ongkir_per_pcs: Math.round(per),
+     metode: use.toUpperCase()
+   });
+
+   html += `
+   <b>${d.name}</b><br>
+   Total CBM: ${d.totalVol.toFixed(4)}<br>
+   Total KG: ${d.totalKg.toFixed(2)}<br>
+   Ongkir total: Rp ${costTotal.toFixed(0)}<br>
+   Ongkir / pcs: Rp ${per.toFixed(0)}<br><br>
+   `;
+ });
+
+ document.getElementById("output").innerHTML = html;
+}
+
+function exportCSV(){
+ if(lastResult.length === 0){
+   alert("Belum ada data. Klik Hitung dulu.");
+   return;
+ }
+
+ const headers = Object.keys(lastResult[0]).join(",");
+ const rows = lastResult.map(r => Object.values(r).join(","));
+ const csv = [headers, ...rows].join("\n");
+
+ const blob = new Blob([csv], { type: "text/csv" });
+ const url = URL.createObjectURL(blob);
+
+ const a = document.createElement("a");
+ a.href = url;
+ a.download = "ongkir_multi_sku.csv";
+ a.click();
+}
+
+// default 2 produk
+addProduct();
+addProduct();
+</script>
+
+</body>
+</html>
